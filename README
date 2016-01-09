@@ -1,0 +1,29 @@
+*** OAuth Access *** 
+1. Link the client_secret.json file to the project roots directory
+
+*** Installation *** 
+1. Install go
+$ brew install go
+
+2. set the GOPATH variable to your working directory
+$ export GOPATH = `pwd`
+
+3. Create the necessary dirs for installation
+$ mkdir src
+$ mkdir pkg
+
+4. Get the Gmail API Go client library and OAuth2
+$ go get -u google.golang.org/api/gmail/v1
+$ go get -u golang.org/x/oauth2/...
+
+# Note: We could potentially skip this step if we checked in the src/ and pkg/ directory
+#   It may be the case that we would expect this repository to live fully in the src/ directory but this
+#   isn't what was suggested by this guide https://developers.google.com/gmail/api/quickstart/go
+
+
+*** Exectuion *** 
+$ go run main.go
+
+*** Notes *** 
+Emacs go-mode - https://github.com/dominikh/go-mode.el
+
