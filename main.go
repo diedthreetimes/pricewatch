@@ -117,7 +117,8 @@ func getOrders(encodedEmail string) ([]string, error) {
   }
   
   doc.Find("div.greeting ~ a").Each( func(i int, s *goquery.Selection) {
-    link, _ := s.Attr("href")
+    //link, _ := s.Attr("href")
+    link := s.Text()
     ret = append(ret, link)
   })
 
