@@ -12,9 +12,11 @@ $ export GOPATH = `pwd`
 $ mkdir src
 $ mkdir pkg
 
-4. Get the Gmail API Go client library and OAuth2
+4. Get the Gmail API Go client library, OAuth2, goquery
 $ go get -u google.golang.org/api/gmail/v1
 $ go get -u golang.org/x/oauth2/...
+$ go get -u golang.org/x/net/html
+$ go get github.com/PuerkitoBio/goquery
 
 # Note: We could potentially skip this step if we checked in the src/ and pkg/ directory
 #   It may be the case that we would expect this repository to live fully in the src/ directory but this

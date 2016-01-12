@@ -2,7 +2,9 @@ package main
 
 import (
   "encoding/json"
+  "encoding/base64"
   "fmt"
+  "bytes"
   "io/ioutil"
   "log"
   "net/http"
@@ -10,11 +12,13 @@ import (
   "os"
   "os/user"
   "path/filepath"
-  
+
   "golang.org/x/net/context"
   "golang.org/x/oauth2"
   "golang.org/x/oauth2/google"
   "google.golang.org/api/gmail/v1"
+  
+  "github.com/PuerkitoBio/goquery"
 )
 
 // getClient uses a Context and Config to retrieve a Token
@@ -89,6 +93,37 @@ func saveToken(file string, token *oauth2.Token) {
   json.NewEncoder(f).Encode(token)
 }
 
+// TODO: Make this dependent on the current date
+// TODO: Make this adjustable based on the CC requirements
+func amazonQueryString() (string) {
+  return "from:auto-confirm@amazon.com after:2015/12/11 before:2016/2/12"
+}
+
+func getOrders(encodedEmail string) ([]string, error) {
+  ret := make([]string, 0, 5)
+
+  data, err := base64.URLEncoding.DecodeString(encodedEmail)
+  
+  if err != nil {
+    return nil, err
+  }
+
+//  log.Printf("This is it %q\n", data)
+  // append (ret, item)
+
+  doc, err := goquery.NewDocumentFromReader(bytes.NewBuffer(data))
+  if err != nil {
+    return nil, err
+  }
+  
+  doc.Find("div.greeting ~ a").Each( func(i int, s *goquery.Selection) {
+    link, _ := s.Attr("href")
+    ret = append(ret, link)
+  })
+
+  return ret, nil
+}
+
 func main() {
   ctx := context.Background()
 
@@ -110,21 +145,72 @@ func main() {
 
   user := "me"
 
-  // TODO: Replace this with a function that lists and prints all recent orders (with a link to the item and the price) 
+  pageToken := ""
+  for {
+    req := srv.Users.Messages.List(user).Q(amazonQueryString())
+    if pageToken != "" {
+      req.PageToken(pageToken)
+    }
 
-//   r, err := srv.Users.Labels.List(user).Do()
-//   if err != nil {
-//     log.Fatalf("Unable to retrieve labels. %v", err)
-//   }
-//   if (len(r.Labels) > 0) {
-//     fmt.Print("Labels:\n")
-//     for _, l := range r.Labels {
-//       fmt.Printf("- %s\n",  l.Name)
-//     }
-//   } else {
-//     fmt.Print("No labels found.")
-//   }
+    r, err := req.Do()
+    if err != nil {
+      log.Fatalf("Unable to retrieve messages. %v", err)
+    }
 
+    log.Printf("Processing %v messages...\n", len(r.Messages))
+    for _, m := range r.Messages {
 
+      msg, err := srv.Users.Messages.Get(user, m.Id).Do()
+      if err != nil {
+        log.Fatalf("Unable to retrieve message %v: %v", m.Id, err)
+      }
+      
+      // TODO: Make these fatals just log
+      // TODO: This is fragile and the structure could easily change, should build something more sophisticated (like just a function :P)
+      // TODO: Use a queue in order to support multipart containers with multiple multipart containers or various other nesting strategies (and potentially images?)
 
+      part := msg.Payload
+
+      // Esentially we are just checking and traversing for multipart/mixed => multipart/alternative => text/html
+      // At the end part = the version of the email with html
+      if part.MimeType == "multipart/mixed" {
+        for _, p := range part.Parts {
+          if p.MimeType == "multipart/alternative" {
+            part = p
+
+            for _, p := range part.Parts {
+              if p.MimeType == "text/html" {
+                part = p                
+                break
+              } 
+            }
+            break
+          } 
+        }
+        
+        if part.MimeType != "text/html" {
+          log.Fatalf("mixed message %v didn't have a nested html type", m.Id)
+        } 
+      } else {
+        log.Fatalf("No multipart/mixed in message %v", m.Id)
+      }
+             
+      items, err := getOrders(part.Body.Data)
+
+      if err != nil {
+        log.Fatalf("getOrders failed %v", err)
+      }
+
+      for _, item := range items {
+        // TODO: Do something useful with the order links (maybe just collect them and store in a DB)?
+        // We ultimately need to turn these orders into specific items!
+        log.Printf("You bought %v\n", item)
+      }
+    }
+
+    if r.NextPageToken == "" {
+      break
+    }
+    pageToken = r.NextPageToken
+  }
 }
